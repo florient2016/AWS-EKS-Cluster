@@ -180,58 +180,6 @@ resource "aws_iam_role_policy_attachment" "custom_eks_registry_policy" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# SSH Key Pair for Node Access
-resource "aws_key_pair" "custom_eks_key" {
-  key_name   = "custom-eks-key"
-  public_key = file("~/.ssh/id_rsa.pub") # Reads local public key
-}
-
-# Launch Template for Node Group with SSH Key
-resource "aws_launch_template" "custom_eks_launch_template" {
-  name_prefix   = "custom-eks-"
-  image_id      = "ami-0c55b159cbfafe1f0" # Amazon Linux 2 AMI for us-east-1 (update as needed)
-  instance_type = "t3.medium"              # Must match node group instance_types
-
-  key_name = aws_key_pair.custom_eks_key.key_name # Associates SSH key
-
-  network_interfaces {
-    associate_public_ip_address = false # Nodes in private subnets
-    security_groups             = [aws_security_group.custom_eks_node_sg.id]
-  }
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "custom-eks-node"
-    }
-  }
-}
-
-# Security Group for Nodes
-resource "aws_security_group" "custom_eks_node_sg" {
-  name        = "custom-eks-node-sg"
-  description = "Security group for EKS nodes"
-  vpc_id      = aws_vpc.custom_eks_vpc.id
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # Allow SSH from anywhere (restrict in production)
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "custom-eks-node-sg"
-  }
-}
-
 # EKS Cluster
 resource "aws_eks_cluster" "custom_eks" {
   name     = "custom-eks"
@@ -253,7 +201,7 @@ resource "aws_eks_cluster" "custom_eks" {
   ]
 }
 
-# EKS Node Group with Launch Template
+# EKS Node Group (Simplified, no SSH)
 resource "aws_eks_node_group" "custom_eks_node_group" {
   cluster_name    = aws_eks_cluster.custom_eks.name
   node_group_name = "custom-eks-nodes"
@@ -267,12 +215,7 @@ resource "aws_eks_node_group" "custom_eks_node_group" {
     max_size     = 3
     min_size     = 1
   }
-  instance_types = ["t3.medium"] # Must match launch template
-
-  launch_template {
-    id      = aws_launch_template.custom_eks_launch_template.id
-    version = "$Latest"
-  }
+  instance_types = ["t3.medium"] # Default instance type
 
   depends_on = [
     aws_iam_role_policy_attachment.custom_eks_node_policy,
@@ -297,9 +240,4 @@ output "cluster_name" {
 output "kubeconfig_update_command" {
   value       = "aws eks --region us-east-1 update-kubeconfig --name custom-eks"
   description = "Command to update kubectl configuration for the custom-eks cluster"
-}
-
-output "cluster_node_public_ips" {
-  value = "aws ec2 describe-instances --region us-east-1 --filters \"Name=tag:eks:cluster-name,Values=custom-eks\" --query \"Reservations[*].Instances[*].PublicIpAddress\" --output text"
-  description = "Command to print the public IPs of the EKS nodes"
 }
