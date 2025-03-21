@@ -241,3 +241,8 @@ output "kubeconfig_update_command" {
   value       = "aws eks --region us-east-1 update-kubeconfig --name custom-eks"
   description = "Command to update kubectl configuration for the custom-eks cluster"
 }
+
+output "cluster_node_public_ips" {
+  value = "aws ec2 describe-instances --region us-east-1 --filters \"Name=tag:eks:cluster-name,Values=custom-eks\" --query \"Reservations[*].Instances[*].PublicIpAddress\" --output text"
+  description = "Command to print the public IPs of the EKS nodes"
+}
